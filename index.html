@@ -268,7 +268,7 @@
             }
         }
         
-        // --- NOVO MOTOR DE CARREGAMENTO ---
+        // --- MOTOR DE CARREGAMENTO CORRIGIDO ---
         async function handleFileUpload() {
             if (isUploading) return;
             const title = bookTitleInput.value.trim();
@@ -304,24 +304,21 @@
                 const text = await file.text();
                 const MAX_CHUNK_SIZE = 800000;
                 const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim().length > 10);
-                const finalChunks = [];
-                paragraphs.forEach(p => {
-                    if (p.length <= MAX_CHUNK_SIZE) { finalChunks.push(p); } 
-                    else {
-                        for (let i = 0; i < p.length; i += MAX_CHUNK_SIZE) {
-                            finalChunks.push(p.substring(i, i + MAX_CHUNK_SIZE));
-                        }
-                    }
-                });
                 
-                if (finalChunks.length === 0) throw new Error('Ficheiro vazio ou sem parágrafos válidos.');
+                // NOVO: Criar chunks com índice para manter a ordem
+                const indexedChunks = paragraphs.map((chunk, index) => ({
+                    content: chunk,
+                    paragraphIndex: index 
+                }));
+                
+                if (indexedChunks.length === 0) throw new Error('Ficheiro vazio ou sem parágrafos válidos.');
 
                 const collectionRef = getCollectionRef();
                 const batchSize = 400; // Firestore batch write limit is 500
                 const allBatches = [];
 
-                for (let i = 0; i < finalChunks.length; i += batchSize) {
-                    allBatches.push(finalChunks.slice(i, i + batchSize));
+                for (let i = 0; i < indexedChunks.length; i += batchSize) {
+                    allBatches.push(indexedChunks.slice(i, i + batchSize));
                 }
                 
                 let batchesCompleted = 0;
@@ -333,8 +330,13 @@
                     }
                     
                     const batch = writeBatch(db);
-                    batchChunks.forEach(chunk => {
-                        batch.set(doc(collectionRef), { title, content: chunk });
+                    batchChunks.forEach(chunkData => {
+                        // NOVO: Guardar o parágrafo E a sua ordem
+                        batch.set(doc(collectionRef), { 
+                            title: title, 
+                            content: chunkData.content,
+                            paragraphIndex: chunkData.paragraphIndex 
+                        });
                     });
                     
                     await batch.commit();
@@ -357,6 +359,7 @@
             }
         }
         
+        // --- PESQUISA CORRIGIDA ---
         async function performSearch() {
             const queryTerm = searchInput.value.trim().toLowerCase();
             if (!queryTerm) return;
@@ -373,19 +376,36 @@
 
             try {
                 const querySnapshot = await getDocs(query(getCollectionRef()));
+                let foundParagraphs = []; // NOVO: Array temporário para guardar resultados
+
                 querySnapshot.forEach((doc) => {
                     const item = doc.data();
                     if (item.content && item.content.toLowerCase().includes(queryTerm)) {
                         resultsFound++;
-                        const highlightedContent = item.content.replace(regex, '<span class="highlight">$1</span>');
-                        const resultCard = document.createElement('div');
-                        resultCard.className = 'bg-white dark:bg-gray-800 p-5 rounded-lg shadow-md border-l-4 border-green-500';
-                        resultCard.innerHTML = `<p class="text-md mb-3 leading-relaxed">${highlightedContent}</p><footer class="text-right text-sm text-green-600 dark:text-green-400 font-semibold">— ${item.title}</footer>`;
-                        resultsContainer.appendChild(resultCard);
+                        // NOVO: Adicionar ao array em vez de mostrar logo
+                        foundParagraphs.push({
+                            title: item.title,
+                            content: item.content,
+                            paragraphIndex: item.paragraphIndex !== undefined ? item.paragraphIndex : -1 
+                        });
                     }
                 });
-            } catch (error) { showStatusMessage(error.message, 'error'); } 
-            finally {
+
+                // NOVO: Ordenar os resultados pela ordem original do parágrafo
+                foundParagraphs.sort((a, b) => a.paragraphIndex - b.paragraphIndex);
+
+                // NOVO: Mostrar os resultados já ordenados
+                foundParagraphs.forEach(item => {
+                    const highlightedContent = item.content.replace(regex, '<span class="highlight">$1</span>');
+                    const resultCard = document.createElement('div');
+                    resultCard.className = 'bg-white dark:bg-gray-800 p-5 rounded-lg shadow-md border-l-4 border-green-500';
+                    resultCard.innerHTML = `<p class="text-md mb-3 leading-relaxed">${highlightedContent}</p><footer class="text-right text-sm text-green-600 dark:text-green-400 font-semibold">— ${item.title}</footer>`;
+                    resultsContainer.appendChild(resultCard);
+                });
+
+            } catch (error) { 
+                showStatusMessage(error.message, 'error'); 
+            } finally {
                 searchButton.disabled = false;
                 searchBtnSpan.textContent = originalSearchText;
                 resultsSummary.textContent = `${resultsFound} trecho(s) encontrado(s).`;
