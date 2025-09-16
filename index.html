@@ -71,6 +71,7 @@
                         <h3 class="font-semibold text-lg">Carregar novo livro (.txt)</h3>
                         <input type="text" id="book-title" placeholder="Ex: O Homem e Seus Símbolos" class="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                         <input type="file" id="file-input" accept=".txt" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 dark:file:bg-blue-900 file:text-blue-700 dark:file:text-blue-300 hover:file:bg-blue-100 dark:hover:file:bg-blue-800">
+                        <p class="text-xs text-gray-500 dark:text-gray-400 -mt-2">Dica: Adicione marcadores como "[página 123]" no seu ficheiro .txt para capturar os números das páginas.</p>
                         <button id="upload-button" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2"><span>Carregar</span></button>
                         <div id="progress-container" class="hidden w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
                             <div id="progress-bar-inner" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
@@ -94,8 +95,8 @@
                 <div id="results-summary" class="text-sm text-gray-600 dark:text-gray-400 mt-3 h-5"></div>
             </div>
             
-            <main id="results-container" class="space-y-6"></main>
-            <div id="message-container" class="text-center mt-10 p-6 bg-white dark:bg-gray-800 rounded-lg shadow-md"></div>
+            <main id="results-container" class="space-y-4"></main>
+            <div id="message-container" class="text-center mt-10 p-6"></div>
         </div>
 
         <div id="status-message" class="fixed bottom-5 right-5 bg-gray-800 text-white py-2 px-4 rounded-lg shadow-xl opacity-0 translate-y-3"></div>
@@ -268,7 +269,7 @@
             }
         }
         
-        // --- MOTOR DE CARREGAMENTO CORRIGIDO ---
+        // --- MOTOR DE CARREGAMENTO MELHORADO ---
         async function handleFileUpload() {
             if (isUploading) return;
             const title = bookTitleInput.value.trim();
@@ -302,19 +303,26 @@
 
             try {
                 const text = await file.text();
-                const MAX_CHUNK_SIZE = 800000;
-                const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim().length > 10);
-                
-                // NOVO: Criar chunks com índice para manter a ordem
-                const indexedChunks = paragraphs.map((chunk, index) => ({
-                    content: chunk,
-                    paragraphIndex: index 
-                }));
+                const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim().length > 5);
+                let currentPage = 1;
+                const pageRegex = /\[(?:página|pag|pág\.?)\s*(\d+)\]/i;
+
+                const indexedChunks = paragraphs.map((p, index) => {
+                    const match = p.match(pageRegex);
+                    if (match) {
+                        currentPage = parseInt(match[1], 10);
+                    }
+                    return {
+                        content: p.replace(pageRegex, '').trim(),
+                        paragraphIndex: index,
+                        pageNumber: currentPage
+                    };
+                }).filter(chunk => chunk.content.length > 0);
                 
                 if (indexedChunks.length === 0) throw new Error('Ficheiro vazio ou sem parágrafos válidos.');
 
                 const collectionRef = getCollectionRef();
-                const batchSize = 400; // Firestore batch write limit is 500
+                const batchSize = 400;
                 const allBatches = [];
 
                 for (let i = 0; i < indexedChunks.length; i += batchSize) {
@@ -331,11 +339,11 @@
                     
                     const batch = writeBatch(db);
                     batchChunks.forEach(chunkData => {
-                        // NOVO: Guardar o parágrafo E a sua ordem
                         batch.set(doc(collectionRef), { 
                             title: title, 
                             content: chunkData.content,
-                            paragraphIndex: chunkData.paragraphIndex 
+                            paragraphIndex: chunkData.paragraphIndex,
+                            pageNumber: chunkData.pageNumber
                         });
                     });
                     
@@ -359,7 +367,7 @@
             }
         }
         
-        // --- PESQUISA CORRIGIDA ---
+        // --- PESQUISA MELHORADA ---
         async function performSearch() {
             const queryTerm = searchInput.value.trim().toLowerCase();
             if (!queryTerm) return;
@@ -371,49 +379,80 @@
 
             resultsContainer.innerHTML = '';
             resultsSummary.textContent = '';
-            let resultsFound = 0;
+            messageContainer.innerHTML = '';
+            let totalResultsFound = 0;
             const regex = new RegExp(`(${queryTerm.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')})`, 'gi');
 
             try {
                 const querySnapshot = await getDocs(query(getCollectionRef()));
-                let foundParagraphs = []; // NOVO: Array temporário para guardar resultados
+                const resultsByBook = {};
 
                 querySnapshot.forEach((doc) => {
                     const item = doc.data();
                     if (item.content && item.content.toLowerCase().includes(queryTerm)) {
-                        resultsFound++;
-                        // NOVO: Adicionar ao array em vez de mostrar logo
-                        foundParagraphs.push({
-                            title: item.title,
+                        if (!resultsByBook[item.title]) {
+                            resultsByBook[item.title] = [];
+                        }
+                        resultsByBook[item.title].push({
                             content: item.content,
-                            paragraphIndex: item.paragraphIndex !== undefined ? item.paragraphIndex : -1 
+                            paragraphIndex: item.paragraphIndex !== undefined ? item.paragraphIndex : -1,
+                            pageNumber: item.pageNumber !== undefined ? item.pageNumber : 'N/A'
                         });
+                        totalResultsFound++;
                     }
                 });
+                
+                const sortedTitles = Object.keys(resultsByBook).sort();
 
-                // NOVO: Ordenar os resultados pela ordem original do parágrafo
-                foundParagraphs.sort((a, b) => a.paragraphIndex - b.paragraphIndex);
+                if (sortedTitles.length > 0) {
+                    sortedTitles.forEach(title => {
+                        const paragraphs = resultsByBook[title];
+                        paragraphs.sort((a, b) => a.paragraphIndex - b.paragraphIndex);
 
-                // NOVO: Mostrar os resultados já ordenados
-                foundParagraphs.forEach(item => {
-                    const highlightedContent = item.content.replace(regex, '<span class="highlight">$1</span>');
-                    const resultCard = document.createElement('div');
-                    resultCard.className = 'bg-white dark:bg-gray-800 p-5 rounded-lg shadow-md border-l-4 border-green-500';
-                    resultCard.innerHTML = `<p class="text-md mb-3 leading-relaxed">${highlightedContent}</p><footer class="text-right text-sm text-green-600 dark:text-green-400 font-semibold">— ${item.title}</footer>`;
-                    resultsContainer.appendChild(resultCard);
-                });
+                        const bookContainer = document.createElement('div');
+                        bookContainer.className = 'bg-white dark:bg-gray-800 rounded-xl shadow-lg border dark:border-gray-700 overflow-hidden';
+
+                        const bookHeader = document.createElement('button');
+                        bookHeader.className = 'w-full text-left p-4 flex justify-between items-center font-bold text-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors focus:outline-none';
+                        bookHeader.innerHTML = `
+                            <span>${title}</span>
+                            <span class="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-sm font-semibold mr-2 px-2.5 py-0.5 rounded">${paragraphs.length} trecho(s)</span>
+                        `;
+
+                        const paragraphsContainer = document.createElement('div');
+                        paragraphsContainer.className = 'p-4 border-t dark:border-gray-600 space-y-4 hidden';
+
+                        bookHeader.onclick = () => {
+                            paragraphsContainer.classList.toggle('hidden');
+                        };
+
+                        paragraphs.forEach(item => {
+                            const highlightedContent = item.content.replace(regex, '<span class="highlight">$1</span>');
+                            const resultCard = document.createElement('div');
+                            resultCard.className = 'p-4 rounded-lg bg-gray-50 dark:bg-gray-700/50 border-l-4 border-green-500';
+                            resultCard.innerHTML = `
+                                <p class="text-md mb-3 leading-relaxed">${highlightedContent}</p>
+                                <footer class="text-right text-sm text-green-600 dark:text-green-400 font-semibold">— Página ${item.pageNumber}</footer>
+                            `;
+                            paragraphsContainer.appendChild(resultCard);
+});
+
+                        bookContainer.appendChild(bookHeader);
+                        bookContainer.appendChild(paragraphsContainer);
+                        resultsContainer.appendChild(bookContainer);
+                    });
+                }
+                
+                resultsSummary.textContent = `${totalResultsFound} trecho(s) encontrado(s) em ${sortedTitles.length} livro(s).`;
+                if(totalResultsFound === 0) {
+                     messageContainer.innerHTML = `<div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6"><p>Nenhum resultado para "<strong>${searchInput.value}</strong>".</p></div>`;
+                }
 
             } catch (error) { 
                 showStatusMessage(error.message, 'error'); 
             } finally {
                 searchButton.disabled = false;
                 searchBtnSpan.textContent = originalSearchText;
-                resultsSummary.textContent = `${resultsFound} trecho(s) encontrado(s).`;
-                if(resultsFound === 0) {
-                     messageContainer.innerHTML = `<p>Nenhum resultado para "<strong>${searchInput.value}</strong>".</p>`
-                } else {
-                    messageContainer.innerHTML = ''
-                }
             }
         }
         
