@@ -87,7 +87,7 @@
             </div>
 
             <!-- Seção de Pesquisa -->
-            <div class="sticky top-4 z-10 mb-8 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-4 sm:p-6 rounded-xl shadow-lg border dark:border-gray-700">
+            <div class="mb-8 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-4 sm:p-6 rounded-xl shadow-lg border dark:border-gray-700">
                  <div class="flex flex-col sm:flex-row gap-4">
                     <input type="text" id="search-input" placeholder="Pesquisar na sua biblioteca..." class="flex-grow w-full px-4 py-3 bg-gray-100 dark:bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-lg">
                     <button id="search-button" class="w-full sm:w-auto bg-green-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-green-700 flex items-center justify-center gap-2"><span>Buscar</span></button>
@@ -396,7 +396,7 @@
                         resultsByBook[item.title].push({
                             content: item.content,
                             paragraphIndex: item.paragraphIndex !== undefined ? item.paragraphIndex : -1,
-                            pageNumber: item.pageNumber !== undefined ? item.pageNumber : 'N/A'
+                            pageNumber: item.pageNumber !== undefined ? item.pageNumber : 1
                         });
                         totalResultsFound++;
                     }
