@@ -103,12 +103,14 @@
 
     <script type="module">
         // --- CONFIGURAÇÃO DO FIREBASE ---
-        // IMPORTANTE: Cole aqui a configuração do SEU projeto Firebase se ainda não o fez.
         const userFirebaseConfig = {
-            // apiKey: "...",
-            // authDomain: "...",
-            // projectId: "...",
-            // ...
+          apiKey: "AIzaSyCAW4noTS-ymHTQ_2PZJRkQfrAhq1oF1_4",
+          authDomain: "teste-de71e.firebaseapp.com",
+          projectId: "teste-de71e",
+          storageBucket: "teste-de71e.firebasestorage.app",
+          messagingSenderId: "554855190948",
+          appId: "1:554855190948:web:39ef4be85858e3bce3f131",
+          measurementId: "G-5RF85DLXZV"
         };
 
         const firebaseConfig = Object.keys(userFirebaseConfig).length > 1 
@@ -304,15 +306,12 @@
 
             try {
                 const text = await file.text();
-                const MAX_CHUNK_SIZE = 800000; // ~0.8MB per chunk
+                const MAX_CHUNK_SIZE = 800000;
                 const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim().length > 10);
                 const finalChunks = [];
-
                 paragraphs.forEach(p => {
-                    if (p.length <= MAX_CHUNK_SIZE) {
-                        finalChunks.push(p);
-                    } else {
-                        // Split large paragraphs
+                    if (p.length <= MAX_CHUNK_SIZE) { finalChunks.push(p); } 
+                    else {
                         for (let i = 0; i < p.length; i += MAX_CHUNK_SIZE) {
                             finalChunks.push(p.substring(i, i + MAX_CHUNK_SIZE));
                         }
@@ -325,14 +324,13 @@
                 const batchSize = 400; // Firestore batch write limit is 500
                 const allBatches = [];
 
-                // Group chunks into batches for writing
                 for (let i = 0; i < finalChunks.length; i += batchSize) {
                     allBatches.push(finalChunks.slice(i, i + batchSize));
                 }
                 
                 let batchesCompleted = 0;
                 for (const batchChunks of allBatches) {
-                    if (!isUploading) { // Check for cancellation before each batch
+                    if (!isUploading) {
                         showStatusMessage('Carregamento cancelado.', 'error');
                         resetUI();
                         return;
@@ -343,7 +341,7 @@
                         batch.set(doc(collectionRef), { title, content: chunk });
                     });
                     
-                    await batch.commit(); // Send the batch to Firestore
+                    await batch.commit();
                     
                     batchesCompleted++;
                     const progress = Math.round((batchesCompleted / allBatches.length) * 100);
@@ -414,13 +412,11 @@
                 if (btn.classList.contains('confirm-delete')) {
                     deleteBookByTitle(title);
                 } else {
-                    // Reset any other confirmation buttons
                     document.querySelectorAll('.confirm-delete').forEach(b => {
                         b.classList.remove('confirm-delete', 'bg-yellow-500', 'hover:bg-yellow-600');
                         b.classList.add('bg-red-500', 'hover:bg-red-700');
                         b.textContent = 'Apagar';
                     });
-                    // Set this button to confirmation state
                     btn.classList.add('confirm-delete', 'bg-yellow-500', 'hover:bg-yellow-600');
                     btn.classList.remove('bg-red-500', 'hover:bg-red-700');
                     btn.textContent = 'Confirmar?';
