@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Biblioteca Pessoal Sincronizada</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .highlight { background-color: #fde047; color: #1f2937; font-weight: bold; border-radius: 3px; padding: 0 2px; }
+        .dark .highlight { background-color: #facc15; color: #111827; }
+        #status-message { transition: opacity 0.5s, transform 0.5s; }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .hidden { display: none; }
+        #progress-bar-inner { transition: width 0.3s ease-in-out; }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 min-h-screen p-4 sm:p-6 md:p-8">
+
+    <div class="w-full max-w-5xl mx-auto">
+        <header class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white">Biblioteca Sincronizada</h1>
+                <p id="user-status" class="text-gray-600 dark:text-gray-400 mt-1">A carregar...</p>
+            </div>
+            <button id="logout-button" class="hidden bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700 transition-colors">Sair</button>
+        </header>
+
+        <!-- Seção de Autenticação -->
+        <div id="auth-section" class="mb-8 bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg border dark:border-gray-700">
+            <div class="grid md:grid-cols-2 gap-6">
+                <!-- Login -->
+                <div class="space-y-4">
+                    <h2 class="text-2xl font-bold">Entrar</h2>
+                    <input type="email" id="login-email" placeholder="Email" class="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <input type="password" id="login-password" placeholder="Palavra-passe" class="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <div id="login-error" class="text-red-500 text-sm h-4"></div>
+                    <button id="login-button" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700">Entrar</button>
+                </div>
+                <!-- Criar Conta -->
+                 <div class="space-y-4">
+                    <h2 class="text-2xl font-bold">Criar Conta</h2>
+                    <input type="email" id="signup-email" placeholder="Email" class="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
+                    <input type="password" id="signup-password" placeholder="Palavra-passe (mín. 6 caracteres)" class="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
+                    <div id="signup-error" class="text-red-500 text-sm h-4"></div>
+                    <button id="signup-button" class="w-full bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700">Criar Conta</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Conteúdo Principal (visível apenas após login) -->
+        <div id="main-content" class="hidden">
+            <!-- Seção de Gestão -->
+            <div class="mb-8 bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg border dark:border-gray-700">
+                <h2 class="text-2xl font-bold mb-4">A sua Biblioteca</h2>
+                <div class="grid md:grid-cols-2 gap-6">
+                    <!-- Carregamento -->
+                    <div id="upload-container" class="space-y-4">
+                        <h3 class="font-semibold text-lg">Carregar novo livro (.txt)</h3>
+                        <input type="text" id="book-title" placeholder="Ex: O Homem e Seus Símbolos" class="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <input type="file" id="file-input" accept=".txt" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 dark:file:bg-blue-900 file:text-blue-700 dark:file:text-blue-300 hover:file:bg-blue-100 dark:hover:file:bg-blue-800">
+                        <button id="upload-button" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2"><span>Carregar</span></button>
+                        <div id="progress-container" class="hidden w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                            <div id="progress-bar-inner" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
+                        </div>
+                        <div id="progress-text" class="text-center text-sm text-gray-600 dark:text-gray-400 h-4"></div>
+                    </div>
+                    <!-- Biblioteca Atual -->
+                    <div class="space-y-3">
+                        <h3 class="font-semibold text-lg">Livros na sua biblioteca:</h3>
+                        <div id="library-list" class="bg-gray-100 dark:bg-gray-700 rounded-lg p-3 h-32 overflow-y-auto space-y-2"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Seção de Pesquisa -->
+            <div class="sticky top-4 z-10 mb-8 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-4 sm:p-6 rounded-xl shadow-lg border dark:border-gray-700">
+                 <div class="flex flex-col sm:flex-row gap-4">
+                    <input type="text" id="search-input" placeholder="Pesquisar na sua biblioteca..." class="flex-grow w-full px-4 py-3 bg-gray-100 dark:bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-lg">
+                    <button id="search-button" class="w-full sm:w-auto bg-green-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-green-700 flex items-center justify-center gap-2"><span>Buscar</span></button>
+                </div>
+                <div id="results-summary" class="text-sm text-gray-600 dark:text-gray-400 mt-3 h-5"></div>
+            </div>
+            
+            <main id="results-container" class="space-y-6"></main>
+            <div id="message-container" class="text-center mt-10 p-6 bg-white dark:bg-gray-800 rounded-lg shadow-md"></div>
+        </div>
+
+        <div id="status-message" class="fixed bottom-5 right-5 bg-gray-800 text-white py-2 px-4 rounded-lg shadow-xl opacity-0 translate-y-3"></div>
+    </div>
+
+    <script type="module">
+        // --- CONFIGURAÇÃO DO FIREBASE ---
+        // IMPORTANTE: Cole aqui a configuração do SEU projeto Firebase se ainda não o fez.
+        const userFirebaseConfig = {
+            // apiKey: "...",
+            // authDomain: "...",
+            // projectId: "...",
+            // ...
+        };
+
+        const firebaseConfig = Object.keys(userFirebaseConfig).length > 1 
+            ? userFirebaseConfig 
+            : (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {});
+        
+        const appId = firebaseConfig.projectId || (typeof __app_id !== 'undefined' ? __app_id : 'default-app-id');
+        
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, getDocs, query, where, writeBatch, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        let db, auth, userId;
+        let isUploading = false;
+        const COLLECTION_NAME = 'personal_library';
+
+        if (!firebaseConfig.apiKey) {
+            document.body.innerHTML = '<div class="text-center p-10 bg-red-100 text-red-700"><strong>Erro:</strong> A configuração do Firebase não foi encontrada. Por favor, cole a sua configuração no ficheiro HTML.</div>';
+            throw new Error("Configuração do Firebase em falta.");
+        }
+
+        const app = initializeApp(firebaseConfig);
+        db = getFirestore(app);
+        auth = getAuth(app);
+        
+        // --- ELEMENTOS DO DOM ---
+        const uploadContainer = document.getElementById('upload-container');
+        const authSection = document.getElementById('auth-section');
+        const mainContent = document.getElementById('main-content');
+        const userStatus = document.getElementById('user-status');
+        const logoutButton = document.getElementById('logout-button');
+        const loginEmail = document.getElementById('login-email');
+        const loginPassword = document.getElementById('login-password');
+        const loginButton = document.getElementById('login-button');
+        const loginError = document.getElementById('login-error');
+        const signupEmail = document.getElementById('signup-email');
+        const signupPassword = document.getElementById('signup-password');
+        const signupButton = document.getElementById('signup-button');
+        const signupError = document.getElementById('signup-error');
+        const bookTitleInput = document.getElementById('book-title');
+        const fileInput = document.getElementById('file-input');
+        const uploadButton = document.getElementById('upload-button');
+        const libraryList = document.getElementById('library-list');
+        const searchInput = document.getElementById('search-input');
+        const searchButton = document.getElementById('search-button');
+        const resultsContainer = document.getElementById('results-container');
+        const messageContainer = document.getElementById('message-container');
+        const resultsSummary = document.getElementById('results-summary');
+        const statusMessage = document.getElementById('status-message');
+        const progressContainer = document.getElementById('progress-container');
+        const progressBarInner = document.getElementById('progress-bar-inner');
+        const progressText = document.getElementById('progress-text');
+
+        // --- LÓGICA DE UI ---
+        function showStatusMessage(message, type = 'success') {
+            statusMessage.textContent = message;
+            statusMessage.className = `fixed bottom-5 right-5 text-white py-2 px-4 rounded-lg shadow-xl opacity-0 translate-y-3 ${type === 'success' ? 'bg-green-600' : 'bg-red-600'}`;
+            setTimeout(() => { statusMessage.classList.remove('opacity-0', 'translate-y-3'); }, 10);
+            setTimeout(() => { statusMessage.classList.add('opacity-0', 'translate-y-3'); }, 4000);
+        }
+
+        function toggleUI(isLoggedIn) {
+            if (isLoggedIn) {
+                authSection.classList.add('hidden');
+                mainContent.classList.remove('hidden');
+                logoutButton.classList.remove('hidden');
+                userStatus.textContent = `Sessão iniciada como: ${auth.currentUser.email}`;
+            } else {
+                authSection.classList.remove('hidden');
+                mainContent.classList.add('hidden');
+                logoutButton.classList.add('hidden');
+                userStatus.textContent = 'Por favor, inicie sessão ou crie uma conta.';
+            }
+        }
+        
+        // --- AUTENTICAÇÃO ---
+        onAuthStateChanged(auth, user => {
+            if (user) {
+                userId = user.uid;
+                toggleUI(true);
+                updateLibraryList();
+            } else {
+                userId = null;
+                toggleUI(false);
+            }
+        });
+
+        logoutButton.addEventListener('click', () => signOut(auth));
+        
+        loginButton.addEventListener('click', async () => {
+            loginError.textContent = '';
+            signupError.textContent = '';
+            try { 
+                await signInWithEmailAndPassword(auth, loginEmail.value, loginPassword.value); 
+            } 
+            catch (error) { 
+                loginError.textContent = `Erro: ${error.code.replace('auth/', '')}`;
+            }
+        });
+
+        signupButton.addEventListener('click', async () => {
+            loginError.textContent = '';
+            signupError.textContent = '';
+             try { 
+                await createUserWithEmailAndPassword(auth, signupEmail.value, signupPassword.value); 
+             }
+             catch (error) { 
+                signupError.textContent = `Erro: ${error.code.replace('auth/', '')}`;
+             }
+        });
+        
+        // --- LÓGICA DA BIBLIOTECA ---
+        function getCollectionRef() {
+             return collection(db, `artifacts/${appId}/users/${userId}/${COLLECTION_NAME}`);
+        }
+
+        async function updateLibraryList() {
+            if (!userId) return;
+            libraryList.innerHTML = '<div class="loader mx-auto"></div>';
+            const snapshot = await getDocs(query(getCollectionRef()));
+            const titles = [...new Set(snapshot.docs.map(doc => doc.data().title))];
+            libraryList.innerHTML = '';
+            if (titles.length > 0) {
+                titles.forEach(title => {
+                    const div = document.createElement('div');
+                    div.className = "flex justify-between items-center text-sm p-2 bg-gray-200 dark:bg-gray-600 rounded";
+                    div.innerHTML = `<span>${title}</span><button data-title="${title}" class="delete-book-btn bg-red-500 hover:bg-red-700 text-white text-xs font-bold py-1 px-2 rounded transition-colors">Apagar</button>`;
+                    libraryList.appendChild(div);
+                });
+            } else {
+                libraryList.innerHTML = '<p class="text-sm text-gray-500 dark:text-gray-400">Nenhum livro carregado.</p>';
+            }
+        }
+        
+        async function deleteBookByTitle(title) {
+             if (!userId) return;
+            showStatusMessage(`A apagar '${title}'...`, 'success');
+            libraryList.innerHTML = '<div class="loader mx-auto"></div>';
+            try {
+                const collectionRef = getCollectionRef();
+                const q = query(collectionRef, where("title", "==", title));
+                const snapshot = await getDocs(q);
+                
+                const batchSize = 499;
+                const totalBatches = Math.ceil(snapshot.docs.length / batchSize);
+                
+                for (let i = 0; i < totalBatches; i++) {
+                    const batch = writeBatch(db);
+                    const start = i * batchSize;
+                    const end = start + batchSize;
+                    snapshot.docs.slice(start, end).forEach(doc => batch.delete(doc.ref));
+                    await batch.commit();
+                }
+                showStatusMessage(`'${title}' foi apagado com sucesso!`);
+            } catch (e) {
+                showStatusMessage(`Erro ao apagar: ${e.message}`, 'error');
+            } finally {
+                await updateLibraryList();
+            }
+        }
+        
+        // --- NOVO MOTOR DE CARREGAMENTO ---
+        async function handleFileUpload() {
+            if (isUploading) return;
+            const title = bookTitleInput.value.trim();
+            const file = fileInput.files[0];
+            if (!title || !file) return showStatusMessage('Título e ficheiro são obrigatórios.', 'error');
+
+            isUploading = true;
+            uploadButton.disabled = true;
+            progressContainer.classList.remove('hidden');
+            progressText.textContent = 'A preparar...';
+            
+            let cancelButton = document.getElementById('cancel-upload');
+            if (!cancelButton) {
+                 cancelButton = document.createElement('button');
+                 cancelButton.id = 'cancel-upload';
+                 cancelButton.className = 'w-full bg-gray-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-600 mt-2';
+                 cancelButton.textContent = 'Cancelar Carregamento';
+                 uploadContainer.appendChild(cancelButton);
+                 cancelButton.onclick = () => { isUploading = false; };
+            }
+            
+            const resetUI = () => {
+                isUploading = false;
+                uploadButton.disabled = false;
+                progressContainer.classList.add('hidden');
+                progressText.textContent = '';
+                if (document.getElementById('cancel-upload')) {
+                    document.getElementById('cancel-upload').remove();
+                }
+            };
+
+            try {
+                const text = await file.text();
+                const MAX_CHUNK_SIZE = 800000; // ~0.8MB per chunk
+                const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim().length > 10);
+                const finalChunks = [];
+
+                paragraphs.forEach(p => {
+                    if (p.length <= MAX_CHUNK_SIZE) {
+                        finalChunks.push(p);
+                    } else {
+                        // Split large paragraphs
+                        for (let i = 0; i < p.length; i += MAX_CHUNK_SIZE) {
+                            finalChunks.push(p.substring(i, i + MAX_CHUNK_SIZE));
+                        }
+                    }
+                });
+                
+                if (finalChunks.length === 0) throw new Error('Ficheiro vazio ou sem parágrafos válidos.');
+
+                const collectionRef = getCollectionRef();
+                const batchSize = 400; // Firestore batch write limit is 500
+                const allBatches = [];
+
+                // Group chunks into batches for writing
+                for (let i = 0; i < finalChunks.length; i += batchSize) {
+                    allBatches.push(finalChunks.slice(i, i + batchSize));
+                }
+                
+                let batchesCompleted = 0;
+                for (const batchChunks of allBatches) {
+                    if (!isUploading) { // Check for cancellation before each batch
+                        showStatusMessage('Carregamento cancelado.', 'error');
+                        resetUI();
+                        return;
+                    }
+                    
+                    const batch = writeBatch(db);
+                    batchChunks.forEach(chunk => {
+                        batch.set(doc(collectionRef), { title, content: chunk });
+                    });
+                    
+                    await batch.commit(); // Send the batch to Firestore
+                    
+                    batchesCompleted++;
+                    const progress = Math.round((batchesCompleted / allBatches.length) * 100);
+                    progressBarInner.style.width = `${progress}%`;
+                    progressText.textContent = `A guardar... ${progress}%`;
+                }
+                
+                showStatusMessage(`'${title}' foi adicionado com sucesso!`);
+                bookTitleInput.value = '';
+                fileInput.value = '';
+                await updateLibraryList();
+
+            } catch (error) { 
+                showStatusMessage(`Erro: ${error.message}`, 'error');
+            } finally { 
+                resetUI();
+            }
+        }
+        
+        async function performSearch() {
+            const queryTerm = searchInput.value.trim().toLowerCase();
+            if (!queryTerm) return;
+            
+            const searchBtnSpan = searchButton.querySelector('span');
+            const originalSearchText = searchBtnSpan.textContent;
+            searchButton.disabled = true;
+            searchBtnSpan.textContent = 'A buscar...';
+
+            resultsContainer.innerHTML = '';
+            resultsSummary.textContent = '';
+            let resultsFound = 0;
+            const regex = new RegExp(`(${queryTerm.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')})`, 'gi');
+
+            try {
+                const querySnapshot = await getDocs(query(getCollectionRef()));
+                querySnapshot.forEach((doc) => {
+                    const item = doc.data();
+                    if (item.content && item.content.toLowerCase().includes(queryTerm)) {
+                        resultsFound++;
+                        const highlightedContent = item.content.replace(regex, '<span class="highlight">$1</span>');
+                        const resultCard = document.createElement('div');
+                        resultCard.className = 'bg-white dark:bg-gray-800 p-5 rounded-lg shadow-md border-l-4 border-green-500';
+                        resultCard.innerHTML = `<p class="text-md mb-3 leading-relaxed">${highlightedContent}</p><footer class="text-right text-sm text-green-600 dark:text-green-400 font-semibold">— ${item.title}</footer>`;
+                        resultsContainer.appendChild(resultCard);
+                    }
+                });
+            } catch (error) { showStatusMessage(error.message, 'error'); } 
+            finally {
+                searchButton.disabled = false;
+                searchBtnSpan.textContent = originalSearchText;
+                resultsSummary.textContent = `${resultsFound} trecho(s) encontrado(s).`;
+                if(resultsFound === 0) {
+                     messageContainer.innerHTML = `<p>Nenhum resultado para "<strong>${searchInput.value}</strong>".</p>`
+                } else {
+                    messageContainer.innerHTML = ''
+                }
+            }
+        }
+        
+        uploadButton.addEventListener('click', handleFileUpload);
+        searchButton.addEventListener('click', performSearch);
+        searchInput.addEventListener('keyup', (e) => e.key === 'Enter' && performSearch());
+        
+        libraryList.addEventListener('click', (e) => {
+            if (e.target.classList.contains('delete-book-btn')) {
+                const btn = e.target;
+                const title = btn.dataset.title;
+                if (btn.classList.contains('confirm-delete')) {
+                    deleteBookByTitle(title);
+                } else {
+                    // Reset any other confirmation buttons
+                    document.querySelectorAll('.confirm-delete').forEach(b => {
+                        b.classList.remove('confirm-delete', 'bg-yellow-500', 'hover:bg-yellow-600');
+                        b.classList.add('bg-red-500', 'hover:bg-red-700');
+                        b.textContent = 'Apagar';
+                    });
+                    // Set this button to confirmation state
+                    btn.classList.add('confirm-delete', 'bg-yellow-500', 'hover:bg-yellow-600');
+                    btn.classList.remove('bg-red-500', 'hover:bg-red-700');
+                    btn.textContent = 'Confirmar?';
+                }
+            }
+        });
+
+    </script>
+</body>
+</html>
