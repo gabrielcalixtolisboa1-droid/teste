@@ -103,7 +103,7 @@
 
     <script type="module">
         // --- CONFIGURAÇÃO DO FIREBASE ---
-        const userFirebaseConfig = {
+        const firebaseConfig = {
           apiKey: "AIzaSyCAW4noTS-ymHTQ_2PZJRkQfrAhq1oF1_4",
           authDomain: "teste-de71e.firebaseapp.com",
           projectId: "teste-de71e",
@@ -112,12 +112,8 @@
           appId: "1:554855190948:web:39ef4be85858e3bce3f131",
           measurementId: "G-5RF85DLXZV"
         };
-
-        const firebaseConfig = Object.keys(userFirebaseConfig).length > 1 
-            ? userFirebaseConfig 
-            : (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {});
         
-        const appId = firebaseConfig.projectId || (typeof __app_id !== 'undefined' ? __app_id : 'default-app-id');
+        const appId = firebaseConfig.projectId;
         
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
