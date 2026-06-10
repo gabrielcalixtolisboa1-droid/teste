@@ -2,6 +2,9 @@
 chcp 65001 >nul
 title Estudo IA - Assistente Local
 
+REM Navega para a pasta onde o start.bat esta, independente de onde foi chamado
+cd /d "%~dp0"
+
 echo.
 echo  ============================================
 echo   Estudo IA - Assistente Local de Estudos
