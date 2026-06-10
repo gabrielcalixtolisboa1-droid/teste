@@ -166,37 +166,52 @@ async def chat(request: ChatRequest):
         )
 
     query_embedding = embedder.encode([request.question]).tolist()[0]
-    n_results = min(5, collection.count())
+    n_results = min(10, collection.count())
 
     results = collection.query(
         query_embeddings=[query_embedding],
         n_results=n_results,
-        include=["documents", "metadatas"],
+        include=["documents", "metadatas", "distances"],
     )
 
-    chunks = results["documents"][0]
-    sources = list(set(m["filename"] for m in results["metadatas"][0]))
+    # Filtra trechos com distância coseno > 0.65 (pouco relevantes)
+    MAX_DISTANCE = 0.65
+    docs_raw = results["documents"][0]
+    metas_raw = results["metadatas"][0]
+    dists_raw = results["distances"][0]
+
+    filtered = [
+        (doc, meta)
+        for doc, meta, dist in zip(docs_raw, metas_raw, dists_raw)
+        if dist < MAX_DISTANCE
+    ]
+
+    # Garante ao menos 3 trechos mesmo que nenhum passe o filtro
+    if not filtered:
+        filtered = [(d, m) for d, m in zip(docs_raw[:3], metas_raw[:3])]
+
+    chunks = [f[0] for f in filtered]
+    sources = list(set(f[1]["filename"] for f in filtered))
     context = "\n\n---\n\n".join(chunks)
 
-    system_prompt = (
-        "Você é um assistente de estudos especializado. "
-        "Responda APENAS com base no contexto fornecido abaixo. "
-        "Se a resposta não estiver no contexto, diga: "
-        '"Não encontrei informação sobre isso nos seus documentos." '
-        "Seja claro, didático e organize sua resposta com bullet points quando necessário. "
-        "Responda em português."
-    )
+    # Prompt único otimizado para modelos pequenos (1b/3b)
+    # Modelos pequenos seguem melhor instruções no próprio turno do usuário
+    prompt = f"""Você é um assistente de estudos. Responda a pergunta usando SOMENTE o texto do CONTEXTO abaixo.
+NÃO use conhecimento externo. NÃO invente nada.
+Se a resposta não estiver no contexto, escreva apenas: "Essa informação não está no documento."
 
-    user_prompt = f"Contexto dos documentos de estudo:\n{context}\n\nPergunta: {request.question}"
+CONTEXTO:
+{context}
+
+PERGUNTA: {request.question}
+
+RESPOSTA (baseada somente no contexto acima):"""
 
     def generate():
         try:
             stream = ollama.chat(
                 model=request.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
+                messages=[{"role": "user", "content": prompt}],
                 stream=True,
             )
             for chunk in stream:
