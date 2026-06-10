@@ -1,82 +1,97 @@
 @echo off
 chcp 65001 >nul
-title Estudo IA – Assistente Local
+title Estudo IA - Assistente Local
 
 echo.
 echo  ============================================
-echo   Estudo IA – Assistente Local de Estudos
+echo   Estudo IA - Assistente Local de Estudos
 echo  ============================================
 echo.
 
 REM ── Verificar Python ─────────────────────────────────────────
 python --version >nul 2>&1
-if errorlevel 1 (
-    echo  [ERRO] Python nao foi encontrado!
-    echo.
-    echo  1. Acesse: https://www.python.org/downloads
-    echo  2. Baixe e instale o Python
-    echo  3. IMPORTANTE: marque "Add python.exe to PATH"
-    echo  4. Feche este prompt e execute start.bat novamente
-    echo.
-    pause
-    exit /b 1
-)
+if errorlevel 1 goto sem_python
 
 for /f "tokens=*" %%i in ('python --version 2^>^&1') do set PYVER=%%i
 echo  Python encontrado: %PYVER%
+goto venv
+
+:sem_python
+echo  [ERRO] Python nao foi encontrado!
+echo.
+echo  1. Acesse: https://www.python.org/downloads
+echo  2. Baixe e instale o Python
+echo  3. IMPORTANTE: marque "Add python.exe to PATH"
+echo  4. Feche este prompt e execute start.bat novamente
+echo.
+pause
+exit /b 1
 
 REM ── Criar ambiente virtual ────────────────────────────────────
-if not exist "venv" (
-    echo  Criando ambiente virtual...
-    python -m venv venv
-    if errorlevel 1 (
-        echo  [ERRO] Falha ao criar venv. Tente: pip install virtualenv
-        pause
-        exit /b 1
-    )
-)
+:venv
+if exist "venv" goto ativar
+echo  Criando ambiente virtual...
+python -m venv venv
+if errorlevel 1 goto erro_venv
+goto ativar
+
+:erro_venv
+echo  [ERRO] Falha ao criar ambiente virtual.
+pause
+exit /b 1
 
 REM ── Ativar venv ───────────────────────────────────────────────
+:ativar
 call venv\Scripts\activate.bat
-if errorlevel 1 (
-    echo  [ERRO] Falha ao ativar o ambiente virtual.
-    pause
-    exit /b 1
-)
+if errorlevel 1 goto erro_ativar
+goto dependencias
 
-REM ── Instalar dependências ─────────────────────────────────────
+:erro_ativar
+echo  [ERRO] Falha ao ativar o ambiente virtual.
+pause
+exit /b 1
+
+REM ── Instalar dependencias ─────────────────────────────────────
+:dependencias
 echo  Verificando dependencias...
 pip show fastapi >nul 2>&1
-if errorlevel 1 (
-    echo  Instalando dependencias pela primeira vez (pode demorar alguns minutos)...
-    echo  Isso so acontece uma vez!
-    echo.
-    pip install -r requirements.txt
-    if errorlevel 1 (
-        echo  [ERRO] Falha ao instalar dependencias.
-        pause
-        exit /b 1
-    )
-)
+if errorlevel 1 goto instalar
+goto ollama
+
+:instalar
+echo  Instalando dependencias pela primeira vez...
+echo  Isso so acontece uma vez, pode demorar alguns minutos.
+echo.
+pip install -r requirements.txt
+if errorlevel 1 goto erro_pip
+goto ollama
+
+:erro_pip
+echo  [ERRO] Falha ao instalar dependencias.
+pause
+exit /b 1
 
 REM ── Verificar Ollama ─────────────────────────────────────────
+:ollama
 echo.
 curl -s http://localhost:11434/api/tags >nul 2>&1
-if errorlevel 1 (
-    echo  [AVISO] Ollama nao esta rodando.
-    echo  Iniciando Ollama...
-    start /b ollama serve
-    timeout /t 3 /nobreak >nul
-)
+if errorlevel 1 goto iniciar_ollama
+goto pastas
 
-REM ── Criar pastas necessárias ──────────────────────────────────
+:iniciar_ollama
+echo  Iniciando Ollama em segundo plano...
+start /b ollama serve
+timeout /t 3 /nobreak >nul
+
+REM ── Criar pastas necessarias ──────────────────────────────────
+:pastas
 if not exist "uploads" mkdir uploads
 if not exist "chroma_db" mkdir chroma_db
 
 REM ── Iniciar servidor ─────────────────────────────────────────
 echo.
 echo  ============================================
-echo   Servidor iniciando em http://localhost:8000
+echo   Servidor em: http://localhost:8000
 echo   Pressione Ctrl+C para encerrar
 echo  ============================================
 echo.
